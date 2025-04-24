@@ -29,3 +29,14 @@ def visualize_segmentation_result(image_path, pred, upscaled_pred_np, contours):
 
     # Save the image with contours
     cv2.imwrite("./tmp/segmentation_with_contours.png", contour_img)
+
+
+def visualize_manual_result(image, landmarks, idx):
+    # draw landmarks on the image
+    for landmark in landmarks:
+        cv2.circle(image, (int(landmark[0]), int(landmark[1])), 5, (0, 255, 0), -1)
+    
+    # using the landmarks, calculate the fit ellipse
+    ellipse = cv2.fitEllipse(landmarks)
+    cv2.ellipse(image, ellipse, (0, 255, 0), 2)
+    cv2.imwrite(f'./tmp/landmarks_{idx}.png', image)

@@ -11,10 +11,10 @@ def main(args):
     dataset_loader = data_loader(args)
 
     for idx, data in enumerate(dataset_loader):
-        image, image_path, sdd, radius, orig_h, orig_w, contours_reshaped = data
+        image, image_path, sdd, radius, orig_h, orig_w, landmarks = data
 
         # Step 1-1: Get 2D landmarks S_P from the image
-        S_P = contours_reshaped[0]
+        S_P = landmarks[0]
 
         # Step 1-2: Estimate observed ellipse E using 2D landmarks S_P
         E = fitzgibbon_et_al(S_P)
@@ -28,7 +28,7 @@ def main(args):
         )
         axes = (int(E[2]), int(E[3]))
         angle = float(E[4])  # Make sure it's a Python float, not numpy.float32 or tensor
-        cv2.ellipse(img, center, axes, angle, 0, 360, (0, 255, 0), 2)
+        cv2.ellipse(img, center, axes, angle+90, 0, 360, (0, 255, 0), 2)
         cv2.imwrite(f'./tmp/ellipse_{idx}.png', img)
 
         # Step 2: Create synthetic 3D landmark S_hat

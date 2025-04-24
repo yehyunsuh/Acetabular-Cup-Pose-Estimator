@@ -17,7 +17,7 @@ def test_model(args, model, device, data_loader):
     with torch.no_grad():
         for idx, (image, sdd, radius, orig_h, orig_w, image_path) in enumerate(tqdm(data_loader, desc="Validation")):
         # for idx, (image, sdd, radius, orig_h, orig_w, image_path) in enumerate(data_loader):
-            # print(f"Processing image {idx + 1}/{len(data_loader)}: {image_path[0]}")
+        #     print(f"Processing image {idx + 1}/{len(data_loader)}: {image_path[0]}")
             image = image.to(device)
             pred = model(image)
 
@@ -37,9 +37,6 @@ def test_model(args, model, device, data_loader):
             # Translate the center points to center of the image
             contours_reshaped[:, 0] = contours_reshaped[:, 0] - orig_h[0].numpy()/2
             contours_reshaped[:, 1] = contours_reshaped[:, 1] - orig_w[0].numpy()/2
-            
-            # Change the y-axis to the opposite direction for conversion to the opencv 2D image coordinate system
-            contours_reshaped[:, 1] = -contours_reshaped[:, 1]
 
             # Add 0 to the z-axis to convert to 3D coordinates
             contours_reshaped = np.concatenate([contours_reshaped, np.zeros((contours_reshaped.shape[0], 1))], axis=1)

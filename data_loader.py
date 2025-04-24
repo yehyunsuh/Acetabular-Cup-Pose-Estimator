@@ -9,7 +9,7 @@ from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset, DataLoader
 
 from segmentation import segment_ellipse
-
+from visualization import visualize_manual_result
 
 class SegmentationDataset_w_Landmark(Dataset):
     """
@@ -55,18 +55,19 @@ class SegmentationDataset_w_Landmark(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         orig_h, orig_w = image.shape[:2]
 
+        landmarks = np.array(landmarks, dtype=np.float32)
+
+        # visualize_manual_result(image, landmarks, idx)
+
         # Translate the center points to center of the image
-        contours_reshaped[:, 0] = contours_reshaped[:, 0] - orig_h[0].numpy()/2
-        contours_reshaped[:, 1] = contours_reshaped[:, 1] - orig_w[0].numpy()/2
+        landmarks[:, 0] = landmarks[:, 0] - orig_w / 2
+        landmarks[:, 1] = landmarks[:, 1] - orig_h / 2
         
-        # Change the y-axis to the opposite direction for conversion to the opencv 2D image coordinate system
-        contours_reshaped[:, 1] = -contours_reshaped[:, 1]
-
         # Add 0 to the z-axis to convert to 3D coordinates
-        contours_reshaped = np.concatenate([contours_reshaped, np.zeros((contours_reshaped.shape[0], 1))], axis=1)
-        contours_reshaped = torch.tensor(contours_reshaped, dtype=torch.float64)
+        landmarks = np.concatenate([landmarks, np.zeros((landmarks.shape[0], 1))], axis=1)
+        landmarks = torch.tensor(landmarks, dtype=torch.float64)
 
-        return image, image_path, sdd, radius, orig_h, orig_w, contours_reshaped
+        return image, image_path, sdd, radius, orig_h, orig_w, landmarks
     
 
 class SegmentationDataset_wo_Landmark(Dataset):
@@ -171,6 +172,7 @@ def data_loader(args):
     """
     # Option 1: Labels from csv file
     if args.landmark_source == "manual":
+        print("===== Using manual landmark source =====")
         dataset = SegmentationDataset_w_Landmark(
             csv_path=os.path.join(args.label_dir, args.label_csv),
             image_dir=args.image_dir,
@@ -179,6 +181,7 @@ def data_loader(args):
 
     # Option 2: Labels from segmentation model
     elif args.landmark_source == "auto":
+        print("===== Using auto landmark source =====")
         dataset = SegmentationDataset_wo_Landmark(
             csv_path=os.path.join(args.label_dir, args.label_csv),
             image_dir=args.image_dir,
