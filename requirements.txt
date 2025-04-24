@@ -1,0 +1,3 @@
+segmentation-models-pytorch
+six
+albumentations
