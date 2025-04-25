@@ -157,7 +157,7 @@ class SegmentationDataset_wo_Landmark_after_segmentation(Dataset):
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        return image, image_path, sdd, radius, orig_h, orig_w, contours_reshaped
+        return image, image_path, sdd[0], radius[0], orig_h, orig_w, contours_reshaped
 
 
 def data_loader(args):
