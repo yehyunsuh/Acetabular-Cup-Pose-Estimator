@@ -1,4 +1,5 @@
 # Acetabular-Cup-Pose-Estimator
+<img width="952" alt="Screenshot 2025-04-28 at 12 08 46 PM" src="https://github.com/user-attachments/assets/fb011ae2-0a28-4ebb-ade2-7fe4d26167a0" />
 
 This project estimates 3D pose parameters of acetabular hip implants from a single 2D fluoroscopy image.
 
