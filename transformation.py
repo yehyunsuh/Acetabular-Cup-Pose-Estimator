@@ -2,11 +2,10 @@
 transformation.py
 
 Transformation utilities for 3D-to-2D geometric modeling of the acetabular cup.
-Includes axis-aligned rotation matrices, rotation of coordinates about an axis,
-and perspective projection for synthetic landmark simulation.
+Includes axis-aligned rotation matrices, coordinate rotation, and perspective projection
+to simulate 2D radiographic projections of 3D anatomical structures.
 
-These functions are used in the optimization process to simulate the projection
-of 3D anatomical structures onto a 2D imaging plane.
+These functions are used during optimization to align synthetic landmarks with observed images.
 
 Author: Yehyun Suh  
 Date: 2025-04-27
@@ -17,11 +16,11 @@ import torch
 
 def rotation_matrices(radian_angle, matrix_type):
     """
-    Generate a 3x3 rotation matrix around the specified axis.
+    Generate a 3x3 rotation matrix around a specified axis.
 
     Args:
         radian_angle (Tensor): Rotation angle in radians.
-        matrix_type (str): One of {'x-axis', 'y-axis', 'z-axis'}.
+        matrix_type (str): Rotation axis, must be one of {'x-axis', 'y-axis', 'z-axis'}.
 
     Returns:
         Tensor: A [3, 3] rotation matrix.
@@ -53,11 +52,11 @@ def rotation_matrices(radian_angle, matrix_type):
 
 def rotate_coordinates(coordinate, translation, rotation_matrix):
     """
-    Rotate 3D coordinates around a given axis with respect to a translation origin.
+    Rotate 3D coordinates around a translated origin.
 
     Args:
         coordinate (Tensor): [N, 3] input 3D coordinates.
-        translation (Tensor): [3] translation vector applied before and after rotation.
+        translation (Tensor): [3] vector for translating to rotation center and back.
         rotation_matrix (Tensor): [3, 3] rotation matrix.
 
     Returns:
@@ -72,14 +71,14 @@ def rotate_coordinates(coordinate, translation, rotation_matrix):
 
 def project_coordinates(ratio, coordinate):
     """
-    Apply perspective projection from 3D to 2D using camera model.
+    Project 3D coordinates onto a 2D plane using perspective scaling.
 
     Args:
-        ratio (Tensor): [N] projection ratio (e.g., H / (H - z)).
+        ratio (Tensor): [N] projection ratio (typically H / (H - z)).
         coordinate (Tensor): [N, 3] input 3D coordinates.
 
     Returns:
-        Tensor: [N, 3] projected 2D coordinates with z = 0.
+        Tensor: [N, 3] projected coordinates where z = 0.
     """
     x_proj = coordinate[:, 0] * ratio
     y_proj = coordinate[:, 1] * ratio

@@ -5,7 +5,18 @@ Optimization pipeline for estimating acetabular cup pose parameters from fluoros
 This script fits synthetic 3D landmarks onto observed 2D landmarks by minimizing the error between
 observed and projected ellipses using a differentiable optimization approach.
 
-Author: Yehyun Suh
+If you find this code useful, please cite the following paper:
+@misc{suh20252d3dregistrationacetabularhip,
+      title={2D/3D Registration of Acetabular Hip Implants Under Perspective Projection and Fully Differentiable Ellipse Fitting}, 
+      author={Yehyun Suh and J. Ryan Martin and Daniel Moyer},
+      year={2025},
+      eprint={2503.07763},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2503.07763}, 
+}
+
+Author: Yehyun Suh  
 Date: 2025-04-27
 """
 
@@ -14,6 +25,8 @@ import csv
 import torch
 import argparse
 import numpy as np
+
+from datetime import datetime
 
 from data_loader import data_loader
 from Fitzgibbon_et_al import fitzgibbon_et_al
@@ -39,10 +52,14 @@ def main(args):
     Args:
         args (argparse.Namespace): Parsed command-line arguments.
     """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(f"{args.vis_dir}/{timestamp}", exist_ok=True)
 
-    # Result CSV file
-    csv_file = os.path.join(args.result_dir, args.result_csv)
+    # Result CSV setup
+    result_csv_name = f"optimization_result_{timestamp}.csv"
+    csv_file = os.path.join(args.result_dir, result_csv_name)
     write_header = not os.path.exists(csv_file)
+
     csv_columns = [
         'image_name', 'image_width', 'image_height', 'source_to_detection_distance', 'radius',
         'anteversion', 'inclination', 'translation_x', 'translation_y', 'object_to_detection_distance',
@@ -52,43 +69,48 @@ def main(args):
         'loss', 'hausdorff_distance', 'anteversion_liaw', 'inclination_parallel'
     ]
 
-    # Step 1: Observe ellipse E using landmarks S_P
-    dataset_loader = data_loader(args)
+    # Load dataset
+    dataset_loader = data_loader(args, timestamp)
 
     for idx, data in enumerate(dataset_loader):
         print('\n\n==========================')
         image, image_path, H, r, orig_h, orig_w, landmarks = data
-        image, image_path, H, r, orig_h, orig_w, landmarks = image[0], image_path[0], H[0], r[0], orig_h[0].numpy().item(), orig_w[0].numpy().item(), landmarks[0]
-        print(f'Processing image {idx + 1}/{len(dataset_loader)}: {image_path}')
+        image = image[0]
+        image_path = image_path[0]
+        H = H[0]
+        r = r[0]
+        orig_h = orig_h[0].numpy().item()
+        orig_w = orig_w[0].numpy().item()
+        landmarks = landmarks[0]
+        print(f"Processing image {idx + 1}/{len(dataset_loader)}: {image_path}")
 
-        # Step 1-1: Get 2D landmarks S_P from the image
+        # Step 1: Observed ellipse E from 2D landmarks
         S_P = landmarks
-
-        # Step 1-2: Estimate observed ellipse E using 2D landmarks S_P
         E = fitzgibbon_et_al(S_P)
-        print(f'Observed Ellipse E: x: {E[0]:.4f}, y: {E[1]:.4f}, major: {E[2]:.4f}, minor: {E[3]:.4f}, angle: {E[4]:.4f}')
+        print(f"Observed Ellipse E: x={E[0]:.4f}, y={E[1]:.4f}, major={E[2]:.4f}, minor={E[3]:.4f}, angle={E[4]:.4f}")
 
-        # Draw ellipse on the image
-        visualize_observed_ellipse_E(image_path, E, orig_h, orig_w, idx)
+        visualize_observed_ellipse_E(args.vis_dir, timestamp, image_path, E, orig_h, orig_w)
 
-        # Step 2
-        # Initial variable setting: theta_hat_0, phi_hat_0, k_hat_0, l_hat_0, h_hat_0
-        beta = r / E[2]  # beta: ratio between the radius of the acetabular cup and the major axis of the ellipse
-        theta_hat_0, phi_hat_0, k_hat_0, l_hat_0, h_hat_0 = 25, 40, E[0] * beta, E[1] * beta, H * (1 - beta)
+        # Step 2: Initial pose parameters
+        beta = r / E[2]
+        theta_hat_0, phi_hat_0 = 25, 40
+        k_hat_0, l_hat_0, h_hat_0 = E[0] * beta, E[1] * beta, H * (1 - beta)
+
         if E[4] < 90:
             phi_hat_0 = -phi_hat_0
 
-        # Create synthetic 3D landmark S_hat
+        # Generate synthetic 3D landmarks
         C = parameter_circle(r, h_hat_0)
         S = parameter_landmarks(args, r, h_hat_0)
 
-        # Define each variable as a separate torch.nn.Parameter
-        theta_hat_0_ = torch.nn.Parameter(torch.tensor(theta_hat_0, dtype=torch.float64))
-        phi_hat_0_ = torch.nn.Parameter(torch.tensor(phi_hat_0, dtype=torch.float64))
-        k_hat_0_ = torch.nn.Parameter(k_hat_0.clone().detach().requires_grad_(True))
-        l_hat_0_ = torch.nn.Parameter(l_hat_0.clone().detach().requires_grad_(True))
-        h_hat_0_ = torch.nn.Parameter(h_hat_0.clone().detach().requires_grad_(True))
-        vars = [theta_hat_0_, phi_hat_0_, k_hat_0_, l_hat_0_, h_hat_0_]
+        # Parameters to optimize
+        vars = [
+            torch.nn.Parameter(torch.tensor(theta_hat_0, dtype=torch.float64)),
+            torch.nn.Parameter(torch.tensor(phi_hat_0, dtype=torch.float64)),
+            torch.nn.Parameter(k_hat_0.clone().detach().requires_grad_(True)),
+            torch.nn.Parameter(l_hat_0.clone().detach().requires_grad_(True)),
+            torch.nn.Parameter(h_hat_0.clone().detach().requires_grad_(True)),
+        ]
 
         loss_fn = CustomMSELoss()
         optimizer = torch.optim.SGD([
@@ -102,29 +124,35 @@ def main(args):
         patience = 0
 
         for epoch in range(args.num_epochs):
-            # Step 2-1: Rotate S_hat to get S_R_hat (C will be used for visualization)
+            # Step 3: Forward pass
             rotation_matrix_x = rotation_matrices(torch.deg2rad(vars[0]), 'x-axis')
             rotation_matrix_z = rotation_matrices(torch.deg2rad(vars[1]), 'z-axis')
             rotation_matrix = torch.matmul(rotation_matrix_z, rotation_matrix_x)
-            extra_plane_translation = torch.stack([torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64), vars[4]])
+
+            extra_plane_translation = torch.stack([
+                torch.tensor(0.0, dtype=torch.float64),
+                torch.tensor(0.0, dtype=torch.float64),
+                vars[4]
+            ])
+
             S_R_hat = rotate_coordinates(S, extra_plane_translation, rotation_matrix)
             C_R_hat = rotate_coordinates(C, extra_plane_translation, rotation_matrix)
 
-            # Step 2-2: Translate S_R_hat to get S_T_hat
-            in_plane_translation = torch.stack([vars[2], vars[3], torch.tensor(0.0, dtype=vars[2].dtype)], dim=0)
-            S_T_hat = S_R_hat + in_plane_translation  
+            in_plane_translation = torch.stack([
+                vars[2], vars[3], torch.tensor(0.0, dtype=torch.float64)
+            ])
+            S_T_hat = S_R_hat + in_plane_translation
             C_T_hat = C_R_hat + in_plane_translation
 
-            # Step 2-3: Project S_T_hat to get S_P_hat
             ratio_S = H / (H - S_T_hat[:, 2])
             S_P_hat = project_coordinates(ratio_S, S_T_hat)
+
             ratio_C = H / (H - C_T_hat[:, 2])
             C_P_hat = project_coordinates(ratio_C, C_T_hat)
 
-            # Step 2-4: Estimate nominal projected ellipse E_hat using 2D landmarks S_P_hat
             E_hat = fitzgibbon_et_al(S_P_hat)
 
-            # Step 3: Calculate error between the parameters of observed ellipse E and the nominal projected ellipse E_hat
+            # Step 4: Compute loss and update
             loss = loss_fn(E_hat, E)
             hd_diff = comparison_fn(E_hat, E)
             loss.backward()
@@ -145,18 +173,15 @@ def main(args):
             if prev_loss - loss.item() < 1e-3:
                 patience += 1
                 if patience > args.patience:
-                    print(f'Early stopping at epoch {epoch}')
-                    print_process(args, epoch, loss, vars, E, E_hat, hd_diff, patience)
+                    print(f"Early stopping at epoch {epoch}")
                     break
 
             if loss.item() < 1e-3 or (epoch > 5000 and loss.item() < 0.5):
-                print(f'Optimization converged at epoch {epoch}')
-                print_process(args, epoch, loss, vars, E, E_hat, hd_diff, patience)
+                print(f"Optimization converged at epoch {epoch}")
                 break
 
             optimizer.step()
 
-            # Clamp theta and phi to the desired range
             vars[0].data = torch.clamp(vars[0].data, 0, 90)
             if E[4] >= 90:
                 vars[1].data = torch.clamp(vars[1].data, 0, 90)
@@ -167,34 +192,25 @@ def main(args):
             optimizer.zero_grad()
             prev_loss = loss.item()
 
+        # Step 5: Post-processing
         theta_opt = best_vars[0].item()
         phi_opt = best_vars[1].item()
         k_opt = best_vars[2].item()
         l_opt = best_vars[3].item()
         h_opt = best_vars[4].item()
-        print(f'Optimized parameters: theta: {theta_opt:.4f}, phi: {phi_opt:.4f}, k: {k_opt:.4f}, l: {l_opt:.4f}, h: {h_opt:.4f}')
-        print(f'Optimized Ellipse E_hat: x: {best_E_hat[0]:.4f}, y: {best_E_hat[1]:.4f}, major: {best_E_hat[2]:.4f}, minor: {best_E_hat[3]:.4f}, angle: {best_E_hat[4]:.4f}')
-        print(f'Best Hausdorff distance: {best_hd_diff:.4f}')
-        print(f'Best loss: {best_loss}')
 
-        # Draw optimized ellipse on the image
-        visualize_optimized_ellipse_E_hat(image_path, E_hat, orig_h, orig_w, idx)
+        visualize_optimized_ellipse_E_hat(args.vis_dir, timestamp, image_path, best_E_hat, orig_h, orig_w)
 
-        # Parallel projection based methods
         liaw_et_al_anteversion = liaw_et_al(E)
-        print(f'Liaw et al. anteversion: {liaw_et_al_anteversion:.2f}')
-
         opt_ellipse_angle = best_E_hat[4].item()
-        parallel_inclination = opt_ellipse_angle if opt_ellipse_angle <= 90 else 180 - opt_ellipse_angle
-        parallel_inclination = 90 - parallel_inclination
+        parallel_inclination = 90 - (opt_ellipse_angle if opt_ellipse_angle <= 90 else 180 - opt_ellipse_angle)
 
-        # Save results to CSV
         result_row = {
             'image_name': os.path.basename(image_path),
             'image_width': orig_w,
             'image_height': orig_h,
-            'source_to_detection_distance': H.item() if isinstance(H, torch.Tensor) else H,
-            'radius': r.item() if isinstance(r, torch.Tensor) else r,
+            'source_to_detection_distance': H.item(),
+            'radius': r.item(),
             'anteversion': np.NaN,
             'inclination': np.NaN,
             'translation_x': np.NaN,
@@ -221,14 +237,12 @@ def main(args):
             'inclination_parallel': parallel_inclination,
         }
 
-        # Append to CSV
         with open(csv_file, mode='a', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=csv_columns)
             if write_header:
                 writer.writeheader()
-                write_header = False  # So it doesn't write again
+                write_header = False
             writer.writerow(result_row)
-        exit()
 
 
 if __name__ == "__main__":
@@ -290,19 +304,17 @@ if __name__ == "__main__":
         help="Patience for early stopping"
     )
 
-    # Result
-    parser.add_argument(
-        "--result_dir", type=str, default="./results",
-        help="Directory to save the optimization results"
-    )
-    parser.add_argument(
-        "--result_csv", type=str, default="optimization_results.csv",
-        help="CSV file to save the optimization results"
-    )
-
     args = parser.parse_args()
 
-    os.makedirs('tmp', exist_ok=True)
+    if args.landmark_source == 'auto':
+        args.vis_dir = './visualization_auto'
+        args.result_dir = './results_auto'
+    elif args.landmark_source == 'manual':
+        args.vis_dir = './visualization_manual'
+        args.result_dir = './results_manual'
+    else:
+        raise ValueError("landmark_source must be either 'manual' or 'auto'")
+
     os.makedirs(args.result_dir, exist_ok=True)
     
     main(args) 

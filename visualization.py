@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 
-def visualize_segmentation_result(image_path, pred, upscaled_pred_np, contours):
+def visualize_segmentation_result(vis_dir, timestamp, image_path, scaled_pred, contours):
     """
     Save visualizations of segmentation results, including:
     - Raw thresholded prediction
@@ -30,26 +30,22 @@ def visualize_segmentation_result(image_path, pred, upscaled_pred_np, contours):
         pred (Tensor): Predicted segmentation mask tensor [1, H, W].
         upscaled_pred_np (ndarray): Upscaled prediction in [H, W] format.
         contours (list): List of contours detected from the predicted mask.
-    """
-    pred_np = pred.squeeze().cpu().numpy()
-    pred_thresholded = (pred_np > 0.5).astype(np.float32) * 255
-    cv2.imwrite('./tmp/segmentation_output.png', pred_thresholded)
-
-    cv2.imwrite('./tmp/segmentation_output_upscaled.png', upscaled_pred_np)
-
+    """ 
     # Overlay prediction on the original image
     org_img = cv2.imread(image_path)
-    upsclaed_pred_np_bgr = cv2.cvtColor(upscaled_pred_np, cv2.COLOR_GRAY2BGR)
+    upsclaed_pred_np_bgr = cv2.cvtColor(scaled_pred, cv2.COLOR_GRAY2BGR)
     overlay = cv2.addWeighted(org_img, 0.7, upsclaed_pred_np_bgr, 0.3, 0)
-    cv2.imwrite('./tmp/segmentation_overlay.png', overlay)
+
+    image_name = image_path.split('/')[-1].split('.')[0]
+    cv2.imwrite(f'./{vis_dir}/{timestamp}/{image_name}_segmentation.png', overlay)
 
     # Draw contours on the image
     contour_img = org_img.copy()
     cv2.drawContours(contour_img, contours, -1, (0, 255, 0), thickness=2)
-    cv2.imwrite("./tmp/segmentation_with_contours.png", contour_img)
+    cv2.imwrite(f'./{vis_dir}/{timestamp}/{image_name}_contours.png', contour_img)
 
 
-def visualize_manual_result(image, landmarks, idx):
+def visualize_manual_result(vis_dir, timestamp, image_path, image, landmarks):
     """
     Draw ground truth landmarks and fitted ellipse on an image.
 
@@ -63,10 +59,12 @@ def visualize_manual_result(image, landmarks, idx):
     
     ellipse = cv2.fitEllipse(landmarks)
     cv2.ellipse(image, ellipse, (0, 255, 0), 2)
-    cv2.imwrite(f'./tmp/landmarks_{idx}.png', image)
+
+    image_name = image_path.split('/')[-1].split('.')[0]
+    cv2.imwrite(f'./{vis_dir}/{timestamp}/{image_name}_landmarks_S_P.png', image)
 
 
-def visualize_observed_ellipse_E(image_path, E, orig_h, orig_w, idx):
+def visualize_observed_ellipse_E(vis_dir, timestamp, image_path, E, orig_h, orig_w):
     """
     Draw the observed ellipse (E) estimated from manual or predicted landmarks.
 
@@ -82,10 +80,12 @@ def visualize_observed_ellipse_E(image_path, E, orig_h, orig_w, idx):
     axes = (int(E[2]), int(E[3]))
     angle = float(E[4])
     cv2.ellipse(img, center, axes, angle + 90, 0, 360, (0, 255, 0), 2)
-    cv2.imwrite(f'./tmp/ellipse_{idx}.png', img)
+
+    image_name = image_path.split('/')[-1].split('.')[0]
+    cv2.imwrite(f'./{vis_dir}/{timestamp}/{image_name}_observed_ellipse_E.png', img)
 
 
-def visualize_optimized_ellipse_E_hat(image_path, E_hat, orig_h, orig_w, idx):
+def visualize_optimized_ellipse_E_hat(vis_dir, timestamp, image_path, E_hat, orig_h, orig_w):
     """
     Draw the optimized ellipse (Ê) estimated through parameter optimization.
 
@@ -101,4 +101,6 @@ def visualize_optimized_ellipse_E_hat(image_path, E_hat, orig_h, orig_w, idx):
     axes = (int(E_hat[2]), int(E_hat[3]))
     angle = float(E_hat[4])
     cv2.ellipse(img, center, axes, angle + 90, 0, 360, (255, 0, 0), 2)
-    cv2.imwrite(f'./tmp/optimized_ellipse_{idx}.png', img)
+
+    image_name = image_path.split('/')[-1].split('.')[0]
+    cv2.imwrite(f'./{vis_dir}/{timestamp}/{image_name}_optimized_ellipse_E_hat.png', img)

@@ -23,7 +23,7 @@ from segmentation_model import UNet
 from visualization import visualize_segmentation_result
 
 
-def test_model(args, model, device, data_loader):
+def test_model(args, model, device, data_loader, vis_dir, timestamp):
     """
     Perform inference on test images and extract 3D contour coordinates.
 
@@ -32,6 +32,8 @@ def test_model(args, model, device, data_loader):
         model (nn.Module): Loaded segmentation model.
         device (str): Device to perform inference ('cuda' or 'cpu').
         data_loader (DataLoader): DataLoader providing input images.
+        vis_dir (str): Directory to save visualization results.
+        timestamp (str): Timestamp to distinguish different experiment runs.
 
     Returns:
         list: A list of tuples containing:
@@ -45,25 +47,29 @@ def test_model(args, model, device, data_loader):
             image = image.to(device)
             pred = model(image)
 
-            # Post-process the prediction
+            # Post-process prediction
             pred = torch.sigmoid(pred[0])
-            upscaled_pred = F.interpolate(
-                pred.unsqueeze(0), size=(orig_h[0], orig_w[0]), mode='bilinear', align_corners=False
+            scaled_pred = F.interpolate(
+                pred.unsqueeze(0),
+                size=(orig_h[0], orig_w[0]),
+                mode='bilinear',
+                align_corners=False
             ).squeeze(0)
 
-            upscaled_pred_np = upscaled_pred.detach().cpu().numpy()
-            upscaled_pred_np = (upscaled_pred_np > 0.5).astype(np.float32)
-            upscaled_pred_np = (upscaled_pred_np * 255).clip(0, 255).astype(np.uint8)
+            scaled_pred_np = scaled_pred.detach().cpu().numpy()
+            scaled_pred_np = (scaled_pred_np > 0.5).astype(np.float32)
+            scaled_pred_np = (scaled_pred_np * 255).clip(0, 255).astype(np.uint8)
 
-            if upscaled_pred_np.shape[0] == 1:
-                upscaled_pred_np = upscaled_pred_np.squeeze(0)
+            if scaled_pred_np.ndim == 3 and scaled_pred_np.shape[0] == 1:
+                scaled_pred_np = scaled_pred_np.squeeze(0)
 
             # Extract contours
-            _, binary = cv2.threshold(upscaled_pred_np, 127, 255, cv2.THRESH_BINARY)
+            _, binary = cv2.threshold(scaled_pred_np, 127, 255, cv2.THRESH_BINARY)
             contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             contours_reshaped = np.array(contours).reshape(-1, 2)
 
-            # Center the contour and convert to 3D
+            # Center contours and lift to 3D
+            contours_reshaped = contours_reshaped.astype(np.float64)
             contours_reshaped[:, 0] -= orig_h[0].item() / 2
             contours_reshaped[:, 1] -= orig_w[0].item() / 2
             contours_3d = np.concatenate([contours_reshaped, np.zeros((contours_reshaped.shape[0], 1))], axis=1)
@@ -71,19 +77,20 @@ def test_model(args, model, device, data_loader):
 
             row.append((image_path[0], sdd, radius, orig_h, orig_w, contours_3d))
 
-            if idx == 0:
-                visualize_segmentation_result(image_path[0], pred, upscaled_pred_np, contours)
+            visualize_segmentation_result(vis_dir, timestamp, image_path[0], scaled_pred_np, contours)
 
     return row
 
 
-def segment_ellipse(args, data_loader):
+def segment_ellipse(args, data_loader, vis_dir, timestamp):
     """
     Load the pretrained U-Net model and run segmentation on the provided data.
 
     Args:
         args (argparse.Namespace): Parsed command-line arguments including model config.
         data_loader (DataLoader): DataLoader for test images.
+        vis_dir (str): Directory to save segmentation visualizations.
+        timestamp (str): Timestamp for saving outputs distinctly.
 
     Returns:
         list: Output from `test_model` representing image-wise segmentation results.
@@ -93,7 +100,7 @@ def segment_ellipse(args, data_loader):
 
     model = UNet(device)
 
-    # Load weights
+    # Load model weights
     weight_path = f"{args.model_dir}/{args.model_name}.pth"
     if os.path.exists(weight_path):
         model.load_state_dict(
@@ -106,6 +113,6 @@ def segment_ellipse(args, data_loader):
     model.to(device)
     print("✅ Model loaded successfully.")
 
-    results = test_model(args, model, device, data_loader)
+    results = test_model(args, model, device, data_loader, vis_dir, timestamp)
 
     return results
