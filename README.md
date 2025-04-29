@@ -6,6 +6,7 @@ This project estimates 3D pose parameters of acetabular hip implants from a sing
 It supports both manual landmark annotations and automatic landmark extraction via segmentation, using a fully differentiable ellipse fitting and optimization pipeline.
 
 - For **annotating** landmarks: [Anatomical-Landmark-Annotator](https://github.com/yehyunsuh/Anatomical-Landmark-Annotator)
+- For **training** ellipsoial region segmentor: [Acetabular-Cup-Segmentation](https://github.com/yehyunsuh/Acetabular-Cup-Segmentation)
 ---
 
 ## 📂 Directory Structure
