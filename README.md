@@ -126,15 +126,14 @@ python main.py \
 | `--seed`                   | Random seed for reproducibility                               | 42                           |
 
 ## Citation
-If you find this helpful, please cite this [paper](https://arxiv.org/abs/2503.07763):
+If you find this helpful, please cite this [paper](https://link.springer.com/chapter/10.1007/978-3-032-05479-1_1):
 ```
-@misc{suh20252d3dregistrationacetabularhip,
-      title={2D/3D Registration of Acetabular Hip Implants Under Perspective Projection and Fully Differentiable Ellipse Fitting}, 
-      author={Yehyun Suh and J. Ryan Martin and Daniel Moyer},
-      year={2025},
-      eprint={2503.07763},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2503.07763}, 
+@inproceedings{suh20252d,
+  title={2D/3D Registration of Acetabular Hip Implants Under Perspective Projection and Fully Differentiable Ellipse Fitting},
+  author={Suh, Yehyun and Martin, J Ryan and Moyer, Daniel},
+  booktitle={Workshop on Clinical Image-Based Procedures},
+  pages={1--10},
+  year={2025},
+  organization={Springer}
 }
 ```
