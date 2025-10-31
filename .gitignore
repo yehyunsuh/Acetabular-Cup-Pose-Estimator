@@ -8,3 +8,4 @@ __pycache__
 *.sh
 *.out
 *tmp*
+.DS_Store

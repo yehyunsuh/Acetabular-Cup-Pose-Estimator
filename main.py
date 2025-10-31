@@ -93,7 +93,7 @@ def main(args):
 
         # Step 2: Initial pose parameters
         beta = r / E[2]
-        theta_hat_0, phi_hat_0 = 25, 40
+        theta_hat_0, phi_hat_0 = -25, 40
         k_hat_0, l_hat_0, h_hat_0 = E[0] * beta, E[1] * beta, H * (1 - beta)
 
         if E[4] < 90:
@@ -182,7 +182,8 @@ def main(args):
 
             optimizer.step()
 
-            vars[0].data = torch.clamp(vars[0].data, 0, 90)
+            # vars[0].data = torch.clamp(vars[0].data, 0, 90)
+            vars[0].data = torch.clamp(vars[0].data, -90, 0)
             if E[4] >= 90:
                 vars[1].data = torch.clamp(vars[1].data, 0, 90)
             else:
@@ -216,7 +217,8 @@ def main(args):
             'translation_x': np.nan,
             'translation_y': np.nan,
             'object_to_detection_distance': np.nan,
-            'opt_anteversion': theta_opt,
+            # 'opt_anteversion': theta_opt,
+            'opt_anteversion': -theta_opt,
             'opt_inclination': phi_opt,
             'opt_translation_x': k_opt,
             'opt_translation_y': l_opt,
